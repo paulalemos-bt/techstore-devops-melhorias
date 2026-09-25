@@ -30,7 +30,7 @@ Estrutura do repositório
 
 Equipe
 
-Artur Leone
-Ana Paula Lemos
-Gustavo Henrique
-Thiago Renan
+Artur Leone, 
+Ana Paula Lemos, 
+Gustavo Henrique, 
+Thiago Renan.
