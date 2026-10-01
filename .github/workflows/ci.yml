@@ -1,0 +1,115 @@
+name: CI/CD TechStore
+
+# Quando o pipeline roda:
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ---------- CI 1: verificar código e construir as imagens ----------
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [auth-service, produtos-service]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verificar estilo do código (flake8)
+        if: ${{ hashFiles(format('{0}/app.py', matrix.service)) != '' }}
+        run: |
+          pip install flake8
+          flake8 ${{ matrix.service }} --max-line-length=120
+
+      - name: Construir imagem Docker
+        if: ${{ hashFiles(format('{0}/Dockerfile', matrix.service)) != '' }}
+        run: docker build -t techstore-${{ matrix.service }}:ci ${{ matrix.service }}
+
+  # ---------- CI 2: teste de verdade do auth-service com banco ----------
+  auth-smoke-test:
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: techstore
+          POSTGRES_PASSWORD: techstore
+          POSTGRES_DB: techstore
+        ports:
+          - 5432:5432
+    env:
+      DB_HOST: localhost
+      JWT_SECRET: segredo-so-para-teste
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependências
+        run: pip install -r auth-service/requirements.txt
+
+      - name: Subir o serviço
+        working-directory: auth-service
+        run: |
+          gunicorn --bind 127.0.0.1:3001 app:app &
+          for i in $(seq 1 20); do
+            curl -sf http://127.0.0.1:3001/auth/health && break
+            sleep 2
+          done
+
+      - name: Testar cadastro, login e token
+        run: |
+          set -e
+          curl -sf -X POST http://127.0.0.1:3001/auth/register \
+            -H "Content-Type: application/json" \
+            -d '{"nome":"CI","email":"ci@teste.com","senha":"123456"}'
+
+          TOKEN=$(curl -sf -X POST http://127.0.0.1:3001/auth/login \
+            -H "Content-Type: application/json" \
+            -d '{"email":"ci@teste.com","senha":"123456"}' \
+            | python -c "import sys,json; print(json.load(sys.stdin)['token'])")
+
+          curl -sf http://127.0.0.1:3001/auth/me -H "Authorization: Bearer $TOKEN"
+
+          # login com senha errada tem que ser recusado (401)
+          CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://127.0.0.1:3001/auth/login \
+            -H "Content-Type: application/json" \
+            -d '{"email":"ci@teste.com","senha":"errada"}')
+          test "$CODE" = "401"
+
+  # ---------- CD: publicar as imagens (só quando entra na main) ----------
+  publish:
+    needs: [build, auth-smoke-test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        service: [auth-service, produtos-service]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login no GitHub Container Registry
+        if: ${{ hashFiles(format('{0}/Dockerfile', matrix.service)) != '' }}
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Construir e publicar imagem
+        if: ${{ hashFiles(format('{0}/Dockerfile', matrix.service)) != '' }}
+        run: |
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}/${{ matrix.service }}"
+          docker build -t "$IMAGE:latest" -t "$IMAGE:${GITHUB_SHA::7}" ${{ matrix.service }}
+          docker push "$IMAGE" --all-tags
