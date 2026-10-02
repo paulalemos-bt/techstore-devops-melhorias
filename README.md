@@ -17,7 +17,7 @@ responsabilidade, comunicando-se através de um API Gateway:
 - Serviço de Autenticação/Usuários — login, cadastro, emissão de JWT
 - Serviço de Produtos — CRUD do catálogo
 - API Gateway — ponto único de entrada, roteando requisições para o serviço correto
-- Banco de Dados — instância única, com schemas separados por serviço
+- Banco de Dados — um banco por serviço (Banco de Usuários e Banco de Produtos), garantindo independência entre os serviços
 
 Estrutura do repositório
 
