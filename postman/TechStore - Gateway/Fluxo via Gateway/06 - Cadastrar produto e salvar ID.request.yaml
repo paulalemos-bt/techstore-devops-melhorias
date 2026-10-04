@@ -1,0 +1,23 @@
+$kind: http-request
+url: "{{base_url}}/produtos"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{token}}
+body:
+  type: text
+  content: |-
+    {
+      "nome": "Mouse sem fio",
+      "descricao": "Produto criado pelo Postman",
+      "preco": 79.90,
+      "estoque": 25
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status 201', () => pm.response.to.have.status(201));
+      const j = pm.response.json();
+      pm.test('Produto possui ID', () => pm.expect(j.id).to.exist);
+      if (j.id) pm.collectionVariables.set('produto_id', j.id);
+order: 6000

@@ -1,0 +1,107 @@
+---
+- name: Provisionar a TechStore com Terraform
+  hosts: local
+  connection: local
+  gather_facts: true
+
+  vars:
+    terraform_dir: "{{ playbook_dir }}/../Terraform"
+
+  tasks:
+    - name: Verificar se o Docker esta acessivel
+      ansible.builtin.command: docker version
+      changed_when: false
+      tags: [always]
+
+    - name: Verificar se o Terraform ja esta instalado
+      ansible.builtin.command: terraform version
+      register: terraform_check
+      changed_when: false
+      failed_when: false
+      tags: [always]
+
+    - name: Instalar dependencias do repositorio HashiCorp
+      become: true
+      ansible.builtin.apt:
+        name: [ca-certificates, curl, gnupg, lsb-release]
+        state: present
+        update_cache: true
+      when: terraform_check.rc != 0
+      tags: [provision]
+
+    - name: Baixar chave do repositorio HashiCorp
+      become: true
+      ansible.builtin.get_url:
+        url: https://apt.releases.hashicorp.com/gpg
+        dest: /usr/share/keyrings/hashicorp-archive-keyring.asc
+        mode: "0644"
+      when: terraform_check.rc != 0
+      tags: [provision]
+
+    - name: Configurar repositorio HashiCorp
+      become: true
+      ansible.builtin.apt_repository:
+        repo: "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.asc] https://apt.releases.hashicorp.com {{ ansible_distribution_release }} main"
+        filename: hashicorp
+        state: present
+      when: terraform_check.rc != 0
+      tags: [provision]
+
+    - name: Instalar Terraform
+      become: true
+      ansible.builtin.apt:
+        name: terraform
+        state: present
+        update_cache: true
+      when: terraform_check.rc != 0
+      tags: [provision]
+
+    - name: Inicializar Terraform
+      ansible.builtin.command: terraform init -input=false
+      args:
+        chdir: "{{ terraform_dir }}"
+      register: terraform_init
+      changed_when: "'Terraform has been successfully initialized' in terraform_init.stdout"
+      tags: [provision]
+
+    - name: Validar Terraform
+      ansible.builtin.command: terraform validate
+      args:
+        chdir: "{{ terraform_dir }}"
+      changed_when: false
+      tags: [provision]
+
+    - name: Aplicar infraestrutura
+      ansible.builtin.command: terraform apply -auto-approve -input=false
+      args:
+        chdir: "{{ terraform_dir }}"
+      register: terraform_apply
+      changed_when: "'0 added, 0 changed, 0 destroyed' not in terraform_apply.stdout"
+      tags: [provision]
+
+    - name: Aguardar o gateway
+      ansible.builtin.uri:
+        url: http://localhost:8080/health
+        status_code: 200
+        return_content: true
+      register: gateway
+      retries: 20
+      delay: 3
+      until:
+        - gateway.status == 200
+        - gateway.json.status == 'ok'
+      tags: [provision]
+
+    - name: Mostrar resultado
+      ansible.builtin.debug:
+        msg: "TechStore disponivel em http://localhost:8080"
+      tags: [provision]
+
+    - name: Desmontar infraestrutura
+      ansible.builtin.command: terraform destroy -auto-approve -input=false
+      args:
+        chdir: "{{ terraform_dir }}"
+      register: terraform_destroy
+      changed_when: "'0 destroyed' not in terraform_destroy.stdout"
+      tags: [never, destroy]
+

@@ -1,0 +1,14 @@
+$kind: collection
+description: Fluxo completo pela unica entrada publica da TechStore.
+variables:
+  base_url: http://localhost:8080
+  test_email: ""
+  token: ""
+  produto_id: ""
+scripts:
+  - type: http:beforeRequest
+    code: |-
+      if (pm.info.requestName === '02 - Cadastrar usuario') {
+        pm.collectionVariables.set('test_email', `teste.${Date.now()}@techstore.local`);
+      }
+    language: text/javascript
