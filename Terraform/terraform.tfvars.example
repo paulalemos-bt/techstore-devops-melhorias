@@ -1,0 +1,9 @@
+# Copie para "terraform.tfvars" e ajuste. O terraform.tfvars NÃO vai para o Git.
+
+# Windows (Docker Desktop): descomente se o Terraform não encontrar o Docker
+# docker_host = "npipe:////./pipe/docker_engine"
+
+# auth_db_password     = "troque-esta-senha"
+# produtos_db_password = "troque-esta-senha-tambem"
+# jwt_secret           = "troque-este-segredo-grande"
+# gateway_port         = 8080

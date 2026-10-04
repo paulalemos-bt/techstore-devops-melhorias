@@ -1,0 +1,104 @@
+# TechStore - orquestração dos serviços
+# Sobe tudo com:  docker compose up -d --build
+#
+# Arquitetura:
+#   Cliente -> gateway (Nginx, única porta aberta: 8080)
+#     /auth/*     -> auth-service     -> auth-db      (Banco de Usuários)
+#     /produtos*  -> produtos-service -> produtos-db  (Banco de Produtos)
+
+services:
+  auth-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: techstore
+      POSTGRES_PASSWORD: ${AUTH_DB_PASSWORD:-techstore}
+      POSTGRES_DB: auth_db
+    volumes:
+      - auth-db-data:/var/lib/postgresql/data
+    networks:
+      - techstore-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U techstore -d auth_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  produtos-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: techstore
+      POSTGRES_PASSWORD: ${PRODUTOS_DB_PASSWORD:-techstore}
+      POSTGRES_DB: produtos_db
+    volumes:
+      - produtos-db-data:/var/lib/postgresql/data
+    networks:
+      - techstore-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U techstore -d produtos_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Sem "ports": só é acessível pelo gateway, dentro da rede do Docker
+  auth-service:
+    build: ./auth-service
+    restart: unless-stopped
+    environment:
+      DB_HOST: auth-db
+      DB_PORT: "5432"
+      DB_USER: techstore
+      DB_PASSWORD: ${AUTH_DB_PASSWORD:-techstore}
+      DB_NAME: auth_db
+      JWT_SECRET: ${JWT_SECRET:-troque-este-segredo}
+    expose:
+      - "3001"
+    depends_on:
+      auth-db:
+        condition: service_healthy
+    networks:
+      - techstore-net
+
+  produtos-service:
+    build: ./produtos-service
+    restart: unless-stopped
+    environment:
+      DB_HOST: produtos-db
+      DB_PORT: "5432"
+      DB_USER: techstore
+      DB_PASSWORD: ${PRODUTOS_DB_PASSWORD:-techstore}
+      DB_NAME: produtos_db
+      # Mesmo segredo do auth-service, para validar os tokens JWT
+      JWT_SECRET: ${JWT_SECRET:-troque-este-segredo}
+    expose:
+      - "3002"
+    depends_on:
+      produtos-db:
+        condition: service_healthy
+    networks:
+      - techstore-net
+
+  # API Gateway (Nginx) - ÚNICO ponto de entrada
+  gateway:
+    build: ./gateway
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      - auth-service
+      - produtos-service
+    networks:
+      - techstore-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  auth-db-data:
+  produtos-db-data:
+
+networks:
+  techstore-net:
