@@ -1,0 +1,18 @@
+$kind: http-request
+url: "{{base_url}}/produtos"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "nome": "Sem token",
+      "descricao": "Teste negativo",
+      "preco": 10,
+      "estoque": 1
+    }
+scripts:
+  - type: afterResponse
+    code: pm.test('Status 401', () => pm.response.to.have.status(401));
+order: 5000

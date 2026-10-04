@@ -1,0 +1,20 @@
+$kind: http-request
+url: "{{base_url}}/auth/login"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "email": "{{test_email}}",
+      "senha": "123456"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status 200', () => pm.response.to.have.status(200));
+      const j = pm.response.json();
+      pm.test('Token retornado', () => pm.expect(j.token).to.be.a('string').and.not.empty);
+      if (j.token) pm.collectionVariables.set('token', j.token);
+order: 3000

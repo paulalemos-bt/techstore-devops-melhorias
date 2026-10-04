@@ -1,0 +1,19 @@
+$kind: http-request
+url: "{{base_url}}/auth/register"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "nome": "Usuario de Teste",
+      "email": "{{test_email}}",
+      "senha": "123456"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status 201', () => pm.response.to.have.status(201));
+      pm.test('Usuario criado', () => { const j = pm.response.json(); pm.expect(j.id).to.exist; pm.expect(j.email).to.eql(pm.collectionVariables.get('test_email')); });
+order: 2000

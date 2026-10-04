@@ -1,0 +1,7 @@
+$kind: http-request
+url: "{{base_url}}/produtos/{{produto_id}}"
+method: GET
+scripts:
+  - type: afterResponse
+    code: pm.test('Status 404', () => pm.response.to.have.status(404));
+order: 11000

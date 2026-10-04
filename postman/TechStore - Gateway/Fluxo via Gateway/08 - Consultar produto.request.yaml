@@ -1,0 +1,9 @@
+$kind: http-request
+url: "{{base_url}}/produtos/{{produto_id}}"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status 200', () => pm.response.to.have.status(200));
+      pm.test('ID correto', () => pm.expect(String(pm.response.json().id)).to.eql(String(pm.collectionVariables.get('produto_id'))));
+order: 8000
